@@ -28,11 +28,11 @@ def main():
 
     def run():
         while True:
-            try:
-                response = model.process()
-                print("Response:" + response)
-            except:
-                print("Error")
+            # try:
+            response = model.process()
+            print("Response:" + response)
+            # except:
+            #     print("Error")
 
     t1 = Thread(target=run)
     t2 = Thread(target=server.run)
@@ -42,6 +42,7 @@ def main():
 
     t1.join()
     t2.join()
+
 
 if __name__ == "__main__":
     main()

@@ -15,13 +15,15 @@ class SplitServerLayer(AbstractModel):
         self.first_layer = first_layer
         self.last_layer = last_layer
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, input_dict: dict) -> torch.Tensor:
+        hidden_states = input_dict["hidden_states"]
+
         CONDITION.acquire()
-        device = x.device
+        device = hidden_states.device
 
         if not self.first_layer:
             # pickle the tensor data
-            serialized_data = pickle.dumps(x)
+            serialized_data = pickle.dumps(input_dict)
             # Send the result to the server
             data = {"byte_data": serialized_data, "stage": "forward"}
             OUT_QUEUE.put(data)
@@ -32,16 +34,17 @@ class SplitServerLayer(AbstractModel):
         data = IN_QUEUE.get()
         print("[LAYER]: Receive intermediate result.")
         # print(repr(serialized_data))
-        x = pickle.loads(data["byte_data"])
+        hidden_states = pickle.loads(data["byte_data"])
 
-        if type(x) is str:
+        if type(hidden_states) is str:  # FIXME why this here?
             CONDITION.wait()
             data = IN_QUEUE.get()
             # print(repr(serialized_data))
-            x = pickle.loads(data["byte_data"])
-            x.to(device)
+            hidden_states = pickle.loads(data["byte_data"])
+            hidden_states.to(device)
         CONDITION.release()
-        return x
+
+        return hidden_states  # suppose to return the hidden states which is changed.
 
     def backward(self, grad: torch.Tensor):
         if not self.last_layer:
@@ -51,7 +54,7 @@ class SplitServerLayer(AbstractModel):
             serialized_data = pickle.dumps(grad)
             # Send the result to the server
             data = {"byte_data": serialized_data, "stage": "backward"}
-            self.out_queue.put(data) # FIXME
+            self.out_queue.put(data)  # FIXME
 
         while self.in_queue.empty():
             pass
